@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    body {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* =========================
+       SPLINE WEBSITE
+    ========================== */
+
+    #canvas3d {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* =========================
+       LOADING SCREEN
+    ========================== */
+
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+
+      background: #ffffff;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      opacity: 1;
+      visibility: visible;
+
+      transition:
+        opacity 1.2s ease,
+        visibility 1.2s ease;
+    }
+
+    #loading-screen.hide {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loading-content {
+      width: 100%;
+      height: 100%;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+
+      perspective: 1200px;
+    }
+
+    /* =========================
+       CARD
+    ========================== */
+
+    .card-wrapper {
+      width: 150px;
+      height: 215px;
+
+      position: relative;
+
+      transform:
+        rotateX(5deg)
+        rotateZ(-4deg);
+
+      transform-style: preserve-3d;
+    }
+
+    .card {
+      width: 100%;
+      height: 100%;
+
+      position: relative;
+
+      transform-style: preserve-3d;
+
+      animation: rotateCard 5s linear infinite;
+    }
+
+    /* Continuous Y rotation */
+
+    @keyframes rotateCard {
+      from {
+        transform: rotateY(0deg);
+      }
+
+      to {
+        transform: rotateY(360deg);
+      }
+    }
+
+    /* =========================
+       CARD FRONT / BACK
+    ========================== */
+
+    .card-face {
+      position: absolute;
+      inset: 0;
+
+      background: #ffffff;
+
+      border: 1px solid #dcdcdc;
+
+      border-radius: 16px;
+
+      box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.12);
+
+      backface-visibility: hidden;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      overflow: hidden;
+    }
+
+    .card-front {
+      transform: translateZ(7px);
+    }
+
+    .card-back {
+      transform: rotateY(180deg) translateZ(7px);
+    }
+
+    /* Card thickness */
+
+    .card::before,
+    .card::after {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+
+      border-radius: 16px;
+
+      background: #f6f6f6;
+
+      border: 1px solid #dedede;
+    }
+
+    .card::before {
+      transform: translateZ(0px);
+    }
+
+    .card::after {
+      transform: translateZ(-7px);
+    }
+
+    /* =========================
+       CARD CONTENT
+    ========================== */
+
+    .card-content {
+      position: absolute;
+      inset: 0;
+
+      display: flex;
+      flex-direction: column;
+
+      align-items: center;
+      justify-content: center;
+    }
+
+    .corner {
+      position: absolute;
+
+      display: flex;
+      flex-direction: column;
+
+      align-items: center;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      font-weight: 500;
+
+      line-height: 1;
+    }
+
+    .corner.top {
+      top: 11px;
+      left: 12px;
+    }
+
+    .corner.bottom {
+      bottom: 11px;
+      right: 12px;
+
+      transform: rotate(180deg);
+    }
+
+    .stay {
+      font-size: 15px;
+      letter-spacing: -0.5px;
+    }
+
+    .small-suit {
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .center-suit {
+      font-size: 68px;
+
+      line-height: 1;
+
+      transform:
+        translateY(2px);
+    }
+
+    /* =========================
+       SUIT COLORS
+    ========================== */
+
+    .red {
+      color: #d71920;
+    }
+
+    .black {
+      color: #111111;
+    }
+
+    /* =========================
+       TEXT
+    ========================== */
+
+    .loading-text {
+      width: 420px;
+      max-width: 80vw;
+
+      text-align: center;
+
+      margin-top: 36px;
+
+      min-height: 45px;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      font-size: 15px;
+
+      line-height: 1.5;
+
+      color: #111111;
+
+      letter-spacing: 0.1px;
+    }
+
+    .sentence {
+      display: none;
+
+      animation: fadeText 1s ease forwards;
+    }
+
+    .sentence.active {
+      display: block;
+    }
+
+    @keyframes fadeText {
+
+      0% {
+        opacity: 0;
+      }
+
+      25% {
+        opacity: 1;
+      }
+
+      75% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0;
+      }
+    }
+
+    /* =========================
+       MOBILE
+    ========================== */
+
+    @media (max-width: 600px) {
+
+      .card-wrapper {
+        width: 125px;
+        height: 180px;
+      }
+
+      .center-suit {
+        font-size: 55px;
+      }
+
+      .stay {
+        font-size: 13px;
+      }
+
+      .small-suit {
+        font-size: 10px;
+      }
+
+      .loading-text {
+        font-size: 13px;
+        margin-top: 28px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+       SPLINE WEBSITE
+  ========================== -->
+
+  <canvas id="canvas3d"></canvas>
+
+
+  <!-- =========================
+       LOADING OVERLAY
+  ========================== -->
+
+  <div id="loading-screen">
+
+    <div class="loading-content">
+
+      <div class="card-wrapper">
+
+        <div class="card" id="card">
+
+          <!-- FRONT -->
+
+          <div class="card-face card-front">
+            <div class="card-content" id="frontContent">
+              <!-- dynamically generated -->
+            </div>
+          </div>
+
+
+          <!-- BACK -->
+
+          <div class="card-face card-back">
+            <div class="card-content" id="backContent">
+              <!-- dynamically generated -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- TEXT -->
+
+      <div class="loading-text">
+
+        <div
+          id="sentence1"
+          class="sentence active">
+          Taking its time…
+        </div>
+
+        <div
+          id="sentence2"
+          class="sentence">
+          When you’re in, click anywhere to let the music in.
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =========================
+       SPLINE
+  ========================== -->
+
+  <script type="module">
+
+    import { Application } from './runtime.js';
+
+    const canvas =
+      document.getElementById('canvas3d');
+
+    const app =
+      new Application(
+        canvas,
+        {
+          htmlContentMode: 'inline'
+        }
+      );
+
+
+    /* =====================================================
+       CARD SUITS
+    ===================================================== */
+
+    const suits = [
+      {
+        symbol: "♣",
+        color: "black"
+      },
+      {
+        symbol: "♥",
+        color: "red"
+      },
+      {
+        symbol: "♦",
+        color: "red"
+      },
+      {
+        symbol: "♠",
+        color: "black"
+      },
+      {
+        symbol: "●",
+        color: "black"
+      }
+    ];
+
+
+    let suitIndex = 0;
+
+
+    /* =====================================================
+       GENERATE CARD FACE
+    ===================================================== */
+
+    function createCardFace(element, suit) {
+
+      element.innerHTML = `
+
+        <div
+          class="corner top ${suit.color}">
+
+          <div class="stay">
+            stay
+          </div>
+
+          <div class="small-suit">
+            ${suit.symbol}
+          </div>
+
+        </div>
+
+
+        <div
+          class="center-suit ${suit.color}">
+
+          ${suit.symbol}
+
+        </div>
+
+
+        <div
+          class="corner bottom ${suit.color}">
+
+          <div class="stay">
+            stay
+          </div>
+
+          <div class="small-suit">
+            ${suit.symbol}
+          </div>
+
+        </div>
+
+      `;
+    }
+
+
+    const front =
+      document.getElementById('frontContent');
+
+    const back =
+      document.getElementById('backContent');
+
+
+    createCardFace(
+      front,
+      suits[0]
+    );
+
+    createCardFace(
+      back,
+      suits[0]
+    );
+
+
+    /* =====================================================
+       CHANGE SUIT EVERY 180 DEGREES
+    ===================================================== */
+
+    let rotation = 0;
+
+    let lastHalfTurn = 0;
+
+    const card =
+      document.getElementById('card');
+
+
+    function updateSuit() {
+
+      const currentHalfTurn =
+        Math.floor(rotation / 180);
+
+      if (
+        currentHalfTurn !== lastHalfTurn
+      ) {
+
+        lastHalfTurn =
+          currentHalfTurn;
+
+        suitIndex =
+          (suitIndex + 1) %
+          suits.length;
+
+        const nextSuit =
+          suits[suitIndex];
+
+        createCardFace(
+          front,
+          nextSuit
+        );
+
+        createCardFace(
+          back,
+          nextSuit
+        );
+      }
+
+      requestAnimationFrame(
+        updateSuit
+      );
+    }
+
+
+    /* We keep the visual rotation
+       in sync with the actual animation */
+
+    const rotationSpeed = 0.9;
+
+    function animateCard() {
+
+      rotation += rotationSpeed;
+
+      requestAnimationFrame(
+        animateCard
+      );
+    }
+
+
+    /*
+      IMPORTANT:
+      CSS itself handles the rotation.
+      This counter tracks the same
+      0 → 360 → 0 cycle.
+    */
+
+    let visualRotation = 0;
+
+    function syncRotation() {
+
+      visualRotation += rotationSpeed;
+
+      if (
+        visualRotation >= 360
+      ) {
+
+        visualRotation -= 360;
+
+      }
+
+      const halfTurn =
+        Math.floor(
+          visualRotation / 180
+        );
+
+      if (
+        halfTurn !== lastHalfTurn
+      ) {
+
+        lastHalfTurn =
+          halfTurn;
+
+        suitIndex =
+          (suitIndex + 1) %
+          suits.length;
+
+        const nextSuit =
+          suits[suitIndex];
+
+        createCardFace(
+          front,
+          nextSuit
+        );
+
+        createCardFace(
+          back,
+          nextSuit
+        );
+      }
+
+      requestAnimationFrame(
+        syncRotation
+      );
+    }
+
+    syncRotation();
+
+
+    /* =====================================================
+       TEXT LOOP
+    ===================================================== */
+
+    const sentence1 =
+      document.getElementById(
+        'sentence1'
+      );
+
+    const sentence2 =
+      document.getElementById(
+        'sentence2'
+      );
+
+
+    function showSentence(
+      element,
+      duration
+    ) {
+
+      element.style.display =
+        'block';
+
+      element.classList.remove(
+        'active'
+      );
+
+      void element.offsetWidth;
+
+      element.classList.add(
+        'active'
+      );
+
+      setTimeout(() => {
+
+        element.style.display =
+          'none';
+
+      }, duration);
+    }
+
+
+    function textLoop() {
+
+      /*
+        Sentence 1:
+        shorter
+        1s fade in
+        hold
+        fade out
+      */
+
+      showSentence(
+        sentence1,
+        3000
+      );
+
+
+      setTimeout(() => {
+
+        /*
+          Sentence 2:
+          noticeably longer
+        */
+
+        showSentence(
+          sentence2,
+          6000
+        );
+
+      }, 3200);
+
+
+      setTimeout(
+        textLoop,
+        9500
+      );
+    }
+
+
+    textLoop();
+
+
+    /* =====================================================
+       LOAD SPLINE
+    ===================================================== */
+
+    let splineLoaded = false;
+
+
+    try {
+
+      const result =
+        app.load(
+          './scene.splinecode'
+        );
+
+
+      /*
+        Some Spline runtimes return
+        a Promise from app.load().
+      */
+
+      if (
+        result &&
+        typeof result.then === 'function'
+      ) {
+
+        result.then(() => {
+
+          splineLoaded = true;
+
+          hideLoadingScreen();
+
+        });
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        'Spline failed to load:',
+        error
+      );
+
+    }
+
+
+    /* =====================================================
+       FALLBACK LOADING TIMER
+    =====================================================
+
+       This prevents the loading card
+       from staying forever in case
+       the runtime does not expose
+       a Promise.
+
+    */
+
+    const minimumLoadingTime =
+      2800;
+
+
+    const pageStart =
+      performance.now();
+
+
+    function hideLoadingScreen() {
+
+      const elapsed =
+        performance.now() -
+        pageStart;
+
+
+      const remaining =
+        Math.max(
+          0,
+          minimumLoadingTime -
+          elapsed
+        );
+
+
+      setTimeout(() => {
+
+        const screen =
+          document.getElementById(
+            'loading-screen'
+          );
+
+        screen.classList.add(
+          'hide'
+        );
+
+      }, remaining);
+
+    }
+
+
+    /*
+       Extra fallback.
+
+       After 8 seconds,
+       hide the loader even if
+       Spline never exposes
+       a load callback.
+    */
+
+    setTimeout(() => {
+
+      const screen =
+        document.getElementById(
+          'loading-screen'
+        );
+
+      if (
+        !screen.classList.contains(
+          'hide'
+        )
+      ) {
+
+        screen.classList.add(
+          'hide'
+        );
+
+      }
+
+    }, 8000);
+
+
+    /* =====================================================
+       CLICK ANYWHERE
+       ===================================================== */
+
+    document
+      .getElementById(
+        'loading-screen'
+      )
+      .addEventListener(
+        'click',
+        () => {
+
+          /*
+            The loading screen will already
+            be fading away naturally.
+
+            This listener is intentionally
+            kept available for your future
+            music-start logic.
+          */
+
+        }
+      );
+
+  </script>
+
+</body>
+</html>
