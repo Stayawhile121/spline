@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stay — Spline Scene with Rotating Loader</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --text: #f5f5f5;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    #canvas3d {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+    #loader-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg);
+      cursor: pointer;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 1s ease, visibility 1s ease;
+    }
+
+    #loader-overlay.fade-out {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+    }
+
+    canvas.webgl {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #caption {
+      position: absolute;
+      left: 50%;
+      bottom: 9vh;
+      transform: translateX(-50%);
+      width: min(900px, 86vw);
+      text-align: center;
+      color: var(--text);
+      font-size: clamp(16px, 1.7vw, 24px);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      line-height: 1.45;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #captionText {
+      opacity: 0;
+    }
+
+    #musicHint {
+      position: absolute;
+      left: 50%;
+      bottom: 4vh;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.38);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 500ms ease;
+    }
+
+    #musicHint.hidden {
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas3d"></canvas>
+  <div id="loader-overlay">
+    <div id="scene"></div>
+    <div id="caption"><span id="captionText"></span></div>
+    <div id="musicHint">click anywhere</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+  <script type="module">
+    import { Application } from './runtime.js';
+
+    const canvas = document.getElementById('canvas3d');
+    const app = new Application(canvas, { htmlContentMode: 'inline' });
+    let isLoaderActive = true;
+
+    app.load('https://pub-26231b8d6a124674be63e2781ffc01aa.r2.dev/scene.splinecode')
+      .then(() => {
+        dismissLoader();
+      })
+      .catch((err) => {
+        console.error('Spline scene failed to load:', err);
+        dismissLoader(); 
+      });
+
+    function dismissLoader() {
+      const loader = document.getElementById('loader-overlay');
+      if (loader && isLoaderActive) {
+        isLoaderActive = false;
+        loader.classList.add('fade-out');
+        stopMusic();
+        setTimeout(() => {
+          stopCardAnimation();
+        }, 1000);
+      }
+    }
+
+    const sceneContainer = document.getElementById('scene');
+    const captionText = document.getElementById('captionText');
+    const musicHint = document.getElementById('musicHint');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d0d0d);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.classList.add('webgl');
+    sceneContainer.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(
+      32,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 0.2, 7.1);
+    camera.lookAt(0, 0, 0);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 1.35);
+    scene.add(hemi);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    keyLight.position.set(3.5, 5, 6);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.left = -4;
+    keyLight.shadow.camera.right = 4;
+    keyLight.shadow.camera.top = 4;
+    keyLight.shadow.camera.bottom = -4;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    fillLight.position.set(-4, 1.5, 3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.PointLight(0xffffff, 18, 18, 2);
+    rimLight.position.set(-2.4, 1.3, -2.0);
+    scene.add(rimLight);
+
+    const CARD_W = 900;
+    const CARD_H = 1350;
+
+    const suits = [
+      { symbol: '♣', color: '#111111', name: 'Club' },
+      { symbol: '♥', color: '#c9172b', name: 'Heart' },
+      { symbol: '♦', color: '#c9172b', name: 'Diamond' },
+      { symbol: '♠', color: '#111111', name: 'Spade' },
+      { symbol: '●', color: '#111111', name: 'Black Circle' }
+    ];
+
+    function roundedRectPath(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+
+    function makeCardCanvas(suitIndex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = CARD_W;
+      canvas.height = CARD_H;
+      const ctx = canvas.getContext('2d');
+      const suit = suits[suitIndex];
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+      const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+      grad.addColorStop(0, 'rgba(255,255,255,0.98)');
+      grad.addColorStop(0.5, 'rgba(250,250,250,1)');
+      grad.addColorStop(1, 'rgba(243,243,243,0.98)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+      ctx.strokeStyle = 'rgba(0,0,0,0.11)';
+      ctx.lineWidth = 5;
+      roundedRectPath(ctx, 18, 18, CARD_W - 36, CARD_H - 36, 46);
+      ctx.stroke();
+
+      ctx.fillStyle = suit.color;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.font = '600 86px Arial, Helvetica, sans-serif';
+      ctx.fillText('stay', 62, 60);
+
+      ctx.font = '700 70px Arial, Helvetica, sans-serif';
+      ctx.fillText(suit.symbol, 69, 151);
+
+      ctx.save();
+      ctx.translate(CARD_W - 62, CARD_H - 60);
+      ctx.rotate(Math.PI);
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.font = '600 86px Arial, Helvetica, sans-serif';
+      ctx.fillText('stay', 0, 0);
+      ctx.font = '700 70px Arial, Helvetica, sans-serif';
+      ctx.fillText(suit.symbol, 7, 91);
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = suit.color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      let centerSize = 430;
+      if (suit.symbol === '●') centerSize = 330;
+      ctx.font = `700 ${centerSize}px Arial, Helvetica, sans-serif`;
+      ctx.fillText(suit.symbol, CARD_W / 2, CARD_H / 2 + 10);
+      ctx.restore();
+
+      return canvas;
+    }
+
+    const faceCanvases = suits.map((_, i) => makeCardCanvas(i));
+    const faceTextures = faceCanvases.map(canvas => {
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.needsUpdate = true;
+      return texture;
+    });
+
+    function createRoundedRectShape(width, height, radius) {
+      const s = new THREE.Shape();
+      const x = -width / 2;
+      const y = -height / 2;
+      const r = Math.min(radius, width / 2, height / 2);
+
+      s.moveTo(x + r, y);
+      s.lineTo(x + width - r, y);
+      s.quadraticCurveTo(x + width, y, x + width, y + r);
+      s.lineTo(x + width, y + height - r);
+      s.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      s.lineTo(x + r, y + height);
+      s.quadraticCurveTo(x, y + height, x, y + height - r);
+      s.lineTo(x, y + r);
+      s.quadraticCurveTo(x, y, x + r, y);
+      return s;
+    }
+
+    const CARD_WIDTH = 3.35;
+    const CARD_HEIGHT = 5.03;
+    const CARD_DEPTH = 0.12;
+
+    const cardShape = createRoundedRectShape(CARD_WIDTH, CARD_HEIGHT, 0.24);
+
+    const cardGeometry = new THREE.ExtrudeGeometry(cardShape, {
+      depth: CARD_DEPTH,
+      bevelEnabled: true,
+      bevelSegments: 5,
+      steps: 2,
+      bevelSize: 0.055,
+      bevelThickness: 0.045,
+      curveSegments: 10
+    });
+
+    cardGeometry.translate(0, 0, -CARD_DEPTH / 2);
+    cardGeometry.computeVertexNormals();
+
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf3f3f3,
+      roughness: 0.48,
+      metalness: 0.0
+    });
+
+    const cardBody = new THREE.Mesh(cardGeometry, bodyMaterial);
+    cardBody.castShadow = true;
+    cardBody.receiveShadow = true;
+
+    const faceGeometry = new THREE.PlaneGeometry(CARD_WIDTH - 0.09, CARD_HEIGHT - 0.09);
+
+    const frontMaterial = new THREE.MeshStandardMaterial({
+      map: faceTextures[0],
+      roughness: 0.62,
+      metalness: 0.0,
+      side: THREE.FrontSide
+    });
+
+    const backMaterial = new THREE.MeshStandardMaterial({
+      map: faceTextures[0],
+      roughness: 0.62,
+      metalness: 0.0,
+      side: THREE.FrontSide
+    });
+
+    const frontFace = new THREE.Mesh(faceGeometry, frontMaterial);
+    frontFace.position.z = CARD_DEPTH / 2 + 0.052;
+
+    const backFace = new THREE.Mesh(faceGeometry, backMaterial);
+    backFace.position.z = -CARD_DEPTH / 2 - 0.052;
+    backFace.rotation.y = Math.PI;
+
+    frontFace.scale.set(0.985, 0.985, 1);
+    backFace.scale.set(0.985, 0.985, 1);
+
+    const card = new THREE.Group();
+    card.add(cardBody, frontFace, backFace);
+
+    card.rotation.x = THREE.MathUtils.degToRad(-8);
+    card.rotation.z = THREE.MathUtils.degToRad(5);
+    card.position.set(0, 0.25, 0);
+    card.scale.set(0.58, 0.58, 0.58);
+    scene.add(card);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(16, 16),
+      new THREE.ShadowMaterial({ opacity: 0.30 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.72;
+    floor.position.z = -0.25;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 256;
+    shadowCanvas.height = 128;
+    const shadowCtx = shadowCanvas.getContext('2d');
+    const shadowGradient = shadowCtx.createRadialGradient(128, 64, 5, 128, 64, 118);
+    shadowGradient.addColorStop(0, 'rgba(0,0,0,0.48)');
+    shadowGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    shadowCtx.fillStyle = shadowGradient;
+    shadowCtx.fillRect(0, 0, 256, 128);
+    const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
+    shadowTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const softShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.35, 0.96),
+      new THREE.MeshBasicMaterial({
+        map: shadowTexture,
+        transparent: true,
+        depthWrite: false
+      })
+    );
+    softShadow.rotation.x = -Math.PI / 2;
+    softShadow.position.set(0.25, -1.66, 0.2);
+    scene.add(softShadow);
+
+    let suitIndex = 0;
+    let rotationY = 0;
+    let halfTurnCount = 0;
+    const ROTATION_SPEED = 0.72;
+
+    function applySuit(index) {
+      frontMaterial.map = faceTextures[index];
+      backMaterial.map = faceTextures[index];
+      frontMaterial.needsUpdate = true;
+      backMaterial.needsUpdate = true;
+    }
+
+    applySuit(suitIndex);
+
+    const captions = [
+      { text: 'Taking its time…', fadeIn: 850, hold: 1900, fadeOut: 850 },
+      { text: 'When you’re in, click anywhere to let the music in.', fadeIn: 850, hold: 4700, fadeOut: 850 }
+    ];
+
+    let captionIndex = 0;
+    let captionSequenceId = 0;
+
+    function animateCaption(element, toOpacity, duration) {
+      return new Promise(resolve => {
+        const start = performance.now();
+        const from = parseFloat(getComputedStyle(element).opacity) || 0;
+
+        function step(now) {
+          const t = Math.min(1, (now - start) / duration);
+          const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+          element.style.opacity = from + (toOpacity - from) * eased;
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    async function runCaptionCycle() {
+      const id = ++captionSequenceId;
+      while (id === captionSequenceId && isLoaderActive) {
+        const current = captions[captionIndex];
+        captionText.textContent = current.text;
+
+        await animateCaption(captionText, 1, current.fadeIn);
+        if (id !== captionSequenceId || !isLoaderActive) return;
+        await new Promise(r => setTimeout(r, current.hold));
+        if (id !== captionSequenceId || !isLoaderActive) return;
+        await animateCaption(captionText, 0, current.fadeOut);
+        if (id !== captionSequenceId || !isLoaderActive) return;
+
+        captionIndex = (captionIndex + 1) % captions.length;
+      }
+    }
+
+    runCaptionCycle();
+
+    let audioContext = null;
+    let masterGain = null;
+    let musicStarted = false;
+    let musicTimer = null;
+
+    function startMusic() {
+      if (musicStarted || !isLoaderActive) return;
+      musicStarted = true;
+
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioContext.createGain();
+      masterGain.gain.setValueAtTime(0, audioContext.currentTime);
+      masterGain.gain.linearRampToValueAtTime(0.045, audioContext.currentTime + 1.6);
+      masterGain.connect(audioContext.destination);
+
+      const notes = [
+        [261.63, 0], [329.63, 0], [392.00, 0],
+        [293.66, 4], [349.23, 4], [440.00, 4]
+      ];
+
+      const startTime = audioContext.currentTime + 0.15;
+      notes.forEach(([freq, offset]) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, startTime + offset);
+        gain.gain.linearRampToValueAtTime(0.42, startTime + offset + 0.8);
+        gain.gain.linearRampToValueAtTime(0, startTime + offset + 3.6);
+        osc.connect(gain).connect(masterGain);
+        osc.start(startTime + offset);
+        osc.stop(startTime + offset + 3.7);
+      });
+
+      musicTimer = setTimeout(startMusicLoop, 8000);
+      musicHint.classList.add('hidden');
+    }
+
+    function startMusicLoop() {
+      if (!musicStarted || !isLoaderActive) return;
+      const now = audioContext.currentTime + 0.12;
+      const chord = [261.63, 329.63, 392.00, 293.66, 349.23, 440.00];
+      chord.forEach((freq, i) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const delay = (i < 3 ? 0 : 4);
+        gain.gain.setValueAtTime(0, now + delay);
+        gain.gain.linearRampToValueAtTime(0.35, now + delay + 0.9);
+        gain.gain.linearRampToValueAtTime(0, now + delay + 3.4);
+        osc.connect(gain).connect(masterGain);
+        osc.start(now + delay);
+        osc.stop(now + delay + 3.6);
+      });
+      musicTimer = setTimeout(startMusicLoop, 8000);
+    }
+
+    function stopMusic() {
+      musicStarted = false;
+      if (musicTimer) {
+        clearTimeout(musicTimer);
+        musicTimer = null;
+      }
+      if (audioContext && masterGain) {
+        try {
+          masterGain.gain.cancelScheduledValues(audioContext.currentTime);
+          masterGain.gain.setValueAtTime(masterGain.gain.value, audioContext.currentTime);
+          masterGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1.0);
+          setTimeout(() => {
+            if (audioContext && audioContext.state !== 'closed') {
+              audioContext.close();
+            }
+          }, 1050);
+        } catch (e) {
+          console.error("Error stopping music:", e);
+        }
+      }
+    }
+
+    const loaderOverlay = document.getElementById('loader-overlay');
+    loaderOverlay.addEventListener('click', () => {
+      if (!musicStarted) startMusic();
+    });
+    const clock = new THREE.Clock();
+    let animationFrameId = null;
+
+    function animate() {
+      animationFrameId = requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.05);
+      const previousRotation = rotationY;
+      rotationY += ROTATION_SPEED * delta;
+      card.rotation.y = rotationY;
+
+      const previousHalfTurn = Math.floor(previousRotation / Math.PI);
+      const currentHalfTurn = Math.floor(rotationY / Math.PI);
+
+      if (currentHalfTurn !== previousHalfTurn) {
+        const crossings = currentHalfTurn - previousHalfTurn;
+        halfTurnCount += Math.abs(crossings);
+
+        for (let i = 0; i < Math.abs(crossings); i++) {
+          suitIndex = (suitIndex + 1) % suits.length;
+          applySuit(suitIndex);
+        }
+      }
+
+      card.position.y = 0.25;
+      card.rotation.x = THREE.MathUtils.degToRad(-8);
+      card.rotation.z = THREE.MathUtils.degToRad(5);
+
+      renderer.render(scene, camera);
+    }
+
+    function stopCardAnimation() {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        renderer.dispose();
+      }
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    });
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') e.preventDefault();
+    });
+  </script>
+</body>
+</html>
